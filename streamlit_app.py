@@ -3,119 +3,117 @@ import pandas as pd
 import plotly.express as px
 from db_supabase import SupabaseDB
 from predict import LeadScorer
+from orchestrator import LeadOrchestrator
 import joblib
 import os
+import io
 
 # Page Config
-st.set_page_config(page_title="Lead Scoring Dashboard", layout="wide")
+st.set_page_config(page_title="Lead Scoring AI - Automatización", layout="wide")
 
-# Initialize DB and Scorer
+# Initialize Components
 @st.cache_resource
 def load_components():
     db = None
     try:
         db = SupabaseDB()
     except Exception as e:
-        st.warning("Supabase not connected. Running in demo mode.")
+        st.warning("Supabase no conectado. Algunos paneles estarán vacíos.")
     
     scorer = LeadScorer()
-    return db, scorer
+    orchestrator = LeadOrchestrator()
+    return db, scorer, orchestrator
 
-db, scorer = load_components()
+db, scorer, orchestrator = load_components()
 
 # Title
-st.title("🎯 Lead Scoring AI - Dashboard")
-st.markdown("Visualiza y predice la calidad de tus leads en tiempo real.")
+st.title("🎯 Lead Scoring AI - Automatización")
+st.markdown("Sistema de predicción automática de calidad de leads.")
 
-# Sidebar - Model Info
+# Sidebar - Model Info & Sync
 with st.sidebar:
-    st.header("⚙️ Configuración del Modelo")
+    st.header("⚙️ Estado del Sistema")
     if scorer.pipeline:
-        st.success("Modelo Cargado: LogisticRegression")
+        st.success("Modelo Activo: LogisticRegression")
         if os.path.exists('model_metadata.pkl'):
             meta = joblib.load('model_metadata.pkl')
-            st.metric("ROC-AUC", f"{meta['auc']:.4f}")
-    else:
-        st.error("Modelo no encontrado. Por favor entrena el modelo primero.")
+            st.metric("Precisión (AUC)", f"{meta['auc']:.4f}")
+    
+    st.divider()
+    st.header("🔄 Acciones")
+    if st.button("Sincronizar Pendientes", help="Procesa los leads de Supabase que aún no tienen score"):
+        with st.spinner("Procesando leads pendientes..."):
+            count = orchestrator.sync_unscored_leads()
+            st.success(f"¡Sincronización completa! Se han procesado {count} leads.")
+            st.rerun()
 
 # Main Tabs
-tab1, tab2 = st.tabs(["📊 Dashboard de Leads", "🔍 Predictor Interactivo"])
+tab1, tab2 = st.tabs(["📊 Panel de Resultados", "📤 Procesamiento por Lote (CSV)"])
 
 with tab1:
-    st.header("Histórico de Scoring")
+    st.header("Histórico de Scoring (Automático)")
     
-    # In a real scenario, fetch from Supabase. For demo, we might use the CSV.
     if db:
         try:
-            # Simplification: Fetching all lead scores
+            # Fetch scores
             response = db.client.table("lead_scores").select("*, leads(raw_data)").execute()
             data = response.data
             if data:
-                df_scores = pd.DataFrame(data)
-                st.dataframe(df_scores)
+                # Process data for display
+                display_data = []
+                for item in data:
+                    raw = item.get('leads', {}).get('raw_data', {})
+                    display_data.append({
+                        "Fecha": item['created_at'],
+                        "Canal": raw.get('channel', 'N/A'),
+                        "Campaña": raw.get('campaign', 'N/A'),
+                        "Score": item['score'],
+                        "Probabilidad": f"{item['probability']*100:.1f}%",
+                        "Factores Positivos": ", ".join(item['explanation'].get('top_positive_factors', []))
+                    })
                 
-                # Plot distribution
-                fig = px.histogram(df_scores, x="score", nbins=20, title="Distribución de Scores")
-                st.plotly_chart(fig)
+                df_scores = pd.DataFrame(display_data)
+                
+                # Metrics
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Total Leads", len(df_scores))
+                c2.metric("Media Score", round(df_scores['Score'].mean(), 1))
+                c3.metric("Leads Hot (>70)", len(df_scores[df_scores['Score'] > 70]))
+
+                st.dataframe(df_scores.sort_values("Fecha", ascending=False), use_container_width=True)
+                
+                # Visuals
+                fig = px.box(df_scores, x="Canal", y="Score", color="Canal", title="Calidad de Leads por Canal")
+                st.plotly_chart(fig, use_container_width=True)
             else:
-                st.info("No hay datos en Supabase todavía. Procesa leads con el orquestador para ver resultados aquí.")
+                st.info("No hay leads procesados. Sube un archivo o pulsa 'Sincronizar Pendientes'.")
         except Exception as e:
-            st.error(f"Error al cargar datos de Supabase: {e}")
+            st.error(f"Error al cargar datos: {e}")
     else:
-        st.info("Conecta Supabase para ver el histórico real. Mostrando datos locales de 'marketing_data.csv' como referencia:")
-        if os.path.exists('marketing_data.csv'):
-            df_local = pd.read_csv('marketing_data.csv')
-            st.dataframe(df_local.head(10))
+        st.error("Conexión a base de datos necesaria para el panel histórico.")
 
 with tab2:
-    st.header("Predecir Nuevo Lead")
+    st.header("Subir archivo de Leads")
+    st.write("Sube un CSV para que el sistema limpie, normalice y prediga automáticamente cada lead.")
     
-    if scorer.pipeline:
-        col1, col2 = st.columns(2)
+    uploaded_file = st.file_uploader("Elige un archivo CSV", type="csv")
+    
+    if uploaded_file is not None:
+        df_upload = pd.read_csv(uploaded_file)
+        st.write("Vista previa del archivo:")
+        st.dataframe(df_upload.head())
         
-        with col1:
-            st.subheader("Datos del Lead")
-            channel = st.selectbox("Canal", ["Organic Search", "Paid Social", "Email", "Referral", "Direct"])
-            campaign = st.selectbox("Campaña", ["Summer_Sale", "Black_Friday", "Webinar_Q1", "Demo_Request", "None"])
-            time_on_site = st.slider("Tiempo en el sitio (seg)", 0, 1800, 300)
-            pages_visited = st.number_input("Páginas visitadas", 1, 50, 3)
-            newsletter_sub = st.checkbox("Suscrito al Newsletter")
-            downloads = st.number_input("Descargas realizadas", 0, 10, 0)
-            
-            if st.button("Calcular Score"):
-                lead_data = {
-                    "channel": channel,
-                    "campaign": campaign,
-                    "time_on_site": time_on_site,
-                    "pages_visited": pages_visited,
-                    "newsletter_sub": 1 if newsletter_sub else 0,
-                    "downloads": downloads
-                }
+        if st.button("🚀 Iniciar Procesamiento Automático"):
+            with st.spinner("Limpiando, normalizando y prediciendo..."):
+                # Use orchestrator to process
+                temp_path = "temp_batch.csv"
+                df_upload.to_csv(temp_path, index=False)
+                results = orchestrator.process_batch(temp_path)
                 
-                result = scorer.predict(lead_data)
+                st.success(f"¡Éxito! Se han procesado {len(results)} leads automáticamente.")
+                # Show summary
+                scores = [r['score'] for r in results if r]
+                st.write(f"Score promedio del lote: **{sum(scores)/len(scores):.1f}**")
                 
-                with col2:
-                    st.subheader("Resultado")
-                    score = result['score']
-                    
-                    if score >= 70:
-                        st.balloons()
-                        st.success(f"🔥 **Lead de Alta Prioridad: {score}/100**")
-                    elif score >= 40:
-                        st.warning(f"⚡ **Lead con Potencial: {score}/100**")
-                    else:
-                        st.error(f"❄️ **Lead de Baja Prioridad: {score}/100**")
-                    
-                    # Probability gauge (simulation)
-                    st.metric("Probabilidad de Conversión", f"{result['probability']*100:.1f}%")
-                    
-                    st.subheader("¿Por qué este score?")
-                    st.write("**Factores Positivos:**")
-                    for factor in result['explanation']['top_positive_factors']:
-                        st.write(f"- ✅ {factor.replace('_', ' ').title()}")
-                        
-                    st.write("**Factores Negativos:**")
-                    for factor in result['explanation']['top_negative_factors']:
-                        st.write(f"- ❌ {factor.replace('_', ' ').title()}")
-    else:
-        st.warning("El predictor no está listo. Asegúrate de que 'lead_scoring_model.pkl' existe.")
+                if os.path.exists(temp_path): os.remove(temp_path)
+                st.rerun()
