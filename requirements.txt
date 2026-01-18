@@ -1,0 +1,13 @@
+pandas
+numpy
+scikit-learn
+joblib
+fastapi
+uvicorn
+python-dotenv
+supabase
+pydantic
+streamlit
+plotly
+tensor-sensor; python_version < '3.10'
+# tensorflow # Opcional si se habilita el enfoque B
