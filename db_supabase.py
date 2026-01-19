@@ -7,14 +7,29 @@ from datetime import datetime
 # Load env variables (assumes .env file is present)
 load_dotenv()
 
+# Global placeholders
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 class SupabaseDB:
     def __init__(self):
-        if not SUPABASE_URL or not SUPABASE_KEY:
+        # Dynamic check to support Streamlit Secrets and late-loaded env vars
+        self.url = os.getenv("SUPABASE_URL")
+        self.key = os.getenv("SUPABASE_KEY")
+        
+        # Fallback to Streamlit Secrets if available
+        if not self.url or not self.key:
+            try:
+                import streamlit as st
+                self.url = st.secrets.get("SUPABASE_URL")
+                self.key = st.secrets.get("SUPABASE_KEY")
+            except:
+                pass
+                
+        if not self.url or not self.key:
             raise ValueError("SUPABASE_URL o SUPABASE_KEY no configuradas. Añádelas a Secrets en Streamlit Cloud o a tu archivo .env local.")
-        self.client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+            
+        self.client: Client = create_client(self.url, self.key)
 
     def insert_lead(self, raw_data: dict, tenant_id: str = "default"):
         """Inserts a new lead and returns its ID."""
