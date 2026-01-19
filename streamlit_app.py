@@ -26,6 +26,19 @@ def load_components():
 
 db, scorer, orchestrator = load_components()
 
+# Database Connection Helper in Sidebar
+with st.sidebar:
+    st.header("🔗 Conexión")
+    if not db:
+        st.error("Supabase no conectado")
+        with st.expander("¿Cómo conectar?"):
+            st.write("Añade estas variables en 'Secrets' de Streamlit Cloud o en tu `.env` local:")
+            st.code("SUPABASE_URL=tu_url\nSUPABASE_KEY=tu_anon_key")
+            st.write("[Consigue tus credenciales aquí](https://supabase.com/dashboard/project/moxiotloytrnlnfgyvdw/settings/api)")
+            st.info("⚠️ **IMPORTANTE**: Asegúrate de añadir el esquema 'leadscoring' en la configuración de la API de Supabase.")
+    else:
+        st.success("Conectado a Supabase (Esquema: leadscoring)")
+
 # Title
 st.title("🎯 Lead Scoring AI - Automatización")
 st.markdown("Sistema de predicción automática de calidad de leads.")

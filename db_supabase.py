@@ -22,7 +22,7 @@ class SupabaseDB:
             "raw_data": raw_data,
             "tenant_id": tenant_id
         }
-        response = self.client.table("leads").insert(data).execute()
+        response = self.client.schema("leadscoring").table("leads").insert(data).execute()
         return response.data[0]['id']
 
     def insert_features(self, lead_id: str, features: dict):
@@ -31,7 +31,7 @@ class SupabaseDB:
             "lead_id": lead_id,
             "features_json": features
         }
-        self.client.table("lead_features").insert(data).execute()
+        self.client.schema("leadscoring").table("lead_features").insert(data).execute()
 
     def insert_score(self, lead_id: str, score: int, probability: float, explanation: dict, model_version_id: str = None):
         """Inserts the calculated score."""
@@ -42,11 +42,11 @@ class SupabaseDB:
             "explanation": explanation,
             "model_version_id": model_version_id
         }
-        self.client.table("lead_scores").insert(data).execute()
+        self.client.schema("leadscoring").table("lead_scores").insert(data).execute()
 
     def get_lead_history(self, lead_id: str):
         """Retrieves scoring history for a lead."""
-        response = self.client.table("lead_scores")\
+        response = self.client.schema("leadscoring").table("lead_scores")\
             .select("*")\
             .eq("lead_id", lead_id)\
             .order("created_at", desc=True)\
@@ -62,7 +62,7 @@ class SupabaseDB:
             "active": True 
         }
         # Ideally disable previous active models here
-        return self.client.table("model_versions").insert(data).execute()
+        return self.client.schema("leadscoring").table("model_versions").insert(data).execute()
 
     def get_unscored_leads(self):
         """Fetches leads from the 'leads' table that don't have an entry in 'lead_scores' yet."""
@@ -72,7 +72,7 @@ class SupabaseDB:
         # Better: select leads left join lead_scores where score is null.
         # Since supabase-py has limitations with complex joins, we'll use an RPC or a view if needed, 
         # but here we'll do a simple fetch of recent leads.
-        response = self.client.table("leads").select("*, lead_scores(id)").execute()
+        response = self.client.schema("leadscoring").table("leads").select("*, lead_scores(id)").execute()
         # Filter leads where 'lead_scores' is an empty list
         unscored = [item for item in response.data if not item.get('lead_scores')]
         return unscored
