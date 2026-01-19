@@ -56,10 +56,13 @@ with st.sidebar:
     st.divider()
     st.header("🔄 Acciones")
     if st.button("Sincronizar Pendientes", help="Procesa los leads de Supabase que aún no tienen score"):
-        with st.spinner("Procesando leads pendientes..."):
-            count = orchestrator.sync_unscored_leads()
-            st.success(f"¡Sincronización completa! Se han procesado {count} leads.")
-            st.rerun()
+        try:
+            with st.spinner("Procesando leads pendientes..."):
+                count = orchestrator.sync_unscored_leads()
+                st.success(f"¡Sincronización completa! Se han procesado {count} leads.")
+                st.rerun()
+        except Exception as e:
+            st.error(f"Error durante la sincronización: {e}")
 
 # Main Tabs
 tab1, tab2 = st.tabs(["📊 Panel de Resultados", "📤 Procesamiento por Lote (CSV)"])
@@ -118,16 +121,20 @@ with tab2:
         st.dataframe(df_upload.head())
         
         if st.button("🚀 Iniciar Procesamiento Automático"):
-            with st.spinner("Limpiando, normalizando y prediciendo..."):
-                # Use orchestrator to process
-                temp_path = "temp_batch.csv"
-                df_upload.to_csv(temp_path, index=False)
-                results = orchestrator.process_batch(temp_path)
-                
-                st.success(f"¡Éxito! Se han procesado {len(results)} leads automáticamente.")
-                # Show summary
-                scores = [r['score'] for r in results if r]
-                st.write(f"Score promedio del lote: **{sum(scores)/len(scores):.1f}**")
-                
-                if os.path.exists(temp_path): os.remove(temp_path)
-                st.rerun()
+            try:
+                with st.spinner("Limpiando, normalizando y prediciendo..."):
+                    # Use orchestrator to process
+                    temp_path = "temp_batch.csv"
+                    df_upload.to_csv(temp_path, index=False)
+                    results = orchestrator.process_batch(temp_path)
+                    
+                    st.success(f"¡Éxito! Se han procesado {len(results)} leads automáticamente.")
+                    # Show summary
+                    scores = [r['score'] for r in results if r]
+                    if scores:
+                        st.write(f"Score promedio del lote: **{sum(scores)/len(scores):.1f}**")
+                    
+                    if os.path.exists(temp_path): os.remove(temp_path)
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Error durante el procesamiento: {e}")
