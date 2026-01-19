@@ -13,7 +13,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 class SupabaseDB:
     def __init__(self):
         if not SUPABASE_URL or not SUPABASE_KEY:
-            raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set in .env file")
+            raise ValueError("SUPABASE_URL o SUPABASE_KEY no configuradas. Añádelas a Secrets en Streamlit Cloud o a tu archivo .env local.")
         self.client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
     def insert_lead(self, raw_data: dict, tenant_id: str = "default"):
