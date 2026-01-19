@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv
+venv/
+ENV/
+env/
+
+# ML Models & Data
+# *.pkl (Removed to push model to GitHub for Streamlit Cloud)
+*.joblib
+marketing_data.csv
+
+# Environments
+.env
+
+# OS
+.DS_Store
+Thumbs.db
