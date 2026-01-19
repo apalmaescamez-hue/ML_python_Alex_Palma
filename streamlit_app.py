@@ -18,6 +18,7 @@ def load_components():
     try:
         db = SupabaseDB()
     except Exception as e:
+        st.sidebar.error(f"Error de conexión: {str(e)}")
         st.warning("Supabase no conectado. Algunos paneles estarán vacíos.")
     
     scorer = LeadScorer()
@@ -68,8 +69,8 @@ with tab1:
     
     if db:
         try:
-            # Fetch scores
-            response = db.client.table("lead_scores").select("*, leads(raw_data)").execute()
+            # Fetch scores using the isolated schema
+            response = db.client.schema("leadscoring").table("lead_scores").select("*, leads(raw_data)").execute()
             data = response.data
             if data:
                 # Process data for display
